@@ -1,152 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Minecraft-klon</title>
-    <style>
-      body { margin: 0; overflow: hidden; }
-      canvas { display: block; }
-    </style>
-  </head>
-  <body>
-    <script type="module">
-      import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-      import { OBJLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/OBJLoader.js';
+<head>
+  <meta charset="UTF-8" />
+  <title>Minecraft-klon</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+    import { OBJLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/OBJLoader.js';
 
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-      const renderer = new THREE.WebGLRenderer();
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const textureLoader = new THREE.TextureLoader();
+    const grassTexture = textureLoader.load('https://cdn.pixabay.com/photo/2024/08/03/18/26/ai-generated-8942839_1280.jpg');
+    grassTexture.wrapS = grassTexture.wrapT = THREE.RepeatWrapping;
+    grassTexture.repeat.set(1, 1);
+
+    const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const blockMaterial = new THREE.MeshBasicMaterial({ map: grassTexture });
+
+    const worldSize = 10;
+    const blocks = [];
+
+    for (let x = 0; x < worldSize; x++) {
+      for (let z = 0; z < worldSize; z++) {
+        const block = new THREE.Mesh(blockGeometry, blockMaterial);
+        block.position.set(x, 0, z);
+        scene.add(block);
+        blocks.push(block);
+      }
+    }
+
+    let playerMesh = new THREE.Object3D();
+    scene.add(playerMesh);
+
+    const loader = new OBJLoader();
+    loader.load(
+      'https://raw.githubusercontent.com/sigand13/Minecraft-in-HTML/main/Jack%2BBlack.obj',
+      function (obj) {
+        obj.scale.set(0.01, 0.01, 0.01);
+        obj.position.set(0, 0, 0);
+        scene.add(obj);
+        playerMesh = obj;
+      },
+      undefined,
+      function (error) {
+        console.error('Kunde inte ladda modellen:', error);
+      }
+    );
+
+    let velocityY = 0;
+    let isOnGround = false;
+    const keys = {};
+    let yaw = 0;
+    let pitch = 0;
+    let thirdPerson = false;
+
+    document.addEventListener('keydown', e => {
+      keys[e.key] = true;
+      if (e.key === 'o' || e.key === 'O') thirdPerson = !thirdPerson;
+    });
+
+    document.addEventListener('keyup', e => keys[e.key] = false);
+
+    function checkCollision(x, y, z) {
+      return blocks.some(block => {
+        const dx = Math.abs(block.position.x - x) < 0.5;
+        const dy = Math.abs(block.position.y - y) < 0.5;
+        const dz = Math.abs(block.position.z - z) < 0.5;
+        return dx && dy && dz;
+      });
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const speed = 4.317 / 60;
+      let direction = new THREE.Vector3();
+
+      if (keys['w']) direction.z -= 1;
+      if (keys['s']) direction.z += 1;
+      if (keys['a']) direction.x -= 1;
+      if (keys['d']) direction.x += 1;
+
+      direction.normalize();
+      direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+      direction.multiplyScalar(speed);
+
+      const newX = playerMesh.position.x + direction.x;
+      const newZ = playerMesh.position.z + direction.z;
+
+      if (!checkCollision(newX, playerMesh.position.y, playerMesh.position.z))
+        playerMesh.position.x = newX;
+      if (!checkCollision(playerMesh.position.x, playerMesh.position.y, newZ))
+        playerMesh.position.z = newZ;
+
+      velocityY -= 0.01;
+      const newY = playerMesh.position.y + velocityY;
+
+      if (!checkCollision(playerMesh.position.x, newY, playerMesh.position.z)) {
+        playerMesh.position.y = newY;
+        isOnGround = false;
+      } else {
+        velocityY = 0;
+        isOnGround = true;
+      }
+
+      if (keys[' '] && isOnGround) {
+        velocityY = 5;
+        isOnGround = false;
+      }
+
+      if (keys['ArrowLeft']) yaw += 0.03;
+      if (keys['ArrowRight']) yaw -= 0.03;
+      if (keys['ArrowUp']) pitch -= 0.02;  // Inverterad
+      if (keys['ArrowDown']) pitch += 0.02;  // Inverterad
+
+      pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+
+      if (!thirdPerson) {
+        camera.position.copy(playerMesh.position);
+        camera.position.y += 1.7;
+        const direction = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(pitch, yaw, 0));
+        camera.lookAt(playerMesh.position.clone().add(direction));
+      } else {
+        const offset = new THREE.Vector3(0, 2, -5).applyEuler(new THREE.Euler(pitch, yaw, 0));
+        camera.position.copy(playerMesh.position.clone().add(offset));
+        camera.lookAt(playerMesh.position);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
-      document.body.appendChild(renderer.domElement);
-
-      const textureLoader = new THREE.TextureLoader();
-      const grassTexture = textureLoader.load('https://cdn.pixabay.com/photo/2024/08/03/18/26/ai-generated-8942839_1280.jpg');
-      grassTexture.wrapS = grassTexture.wrapT = THREE.RepeatWrapping;
-      grassTexture.repeat.set(1, 1);
-
-      const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
-      const blockMaterial = new THREE.MeshBasicMaterial({ map: grassTexture });
-
-      const worldSize = 10;
-      const blocks = [];
-
-      for (let x = 0; x < worldSize; x++) {
-        for (let z = 0; z < worldSize; z++) {
-          const block = new THREE.Mesh(blockGeometry, blockMaterial);
-          block.position.set(x, 0, z);
-          scene.add(block);
-          blocks.push(block);
-        }
-      }
-
-      let playerMesh = new THREE.Object3D();
-      scene.add(playerMesh);
-
-      const loader = new OBJLoader();
-      loader.load(
-        'https://raw.githubusercontent.com/sigand13/Minecraft-in-HTML/refs/heads/main/Jack%2BBlack.obj', // byt till din faktiska länk
-        function (obj) {
-          obj.scale.set(0.01, 0.01, 0.01);
-          obj.position.set(0, 0, 0);
-          scene.add(obj);
-          playerMesh = obj;
-        },
-        undefined,
-        function (error) {
-          console.error('Kunde inte ladda modellen:', error);
-        }
-      );
-
-      let velocityY = 0;
-      let isOnGround = false;
-      const keys = {};
-      let yaw = 0;
-      let pitch = 0;
-      let thirdPerson = false;
-
-      document.addEventListener('keydown', e => {
-        keys[e.key] = true;
-        if (e.key === 'o' || e.key === 'O') thirdPerson = !thirdPerson;
-      });
-
-      document.addEventListener('keyup', e => keys[e.key] = false);
-
-      function checkCollision(x, y, z) {
-        return blocks.some(block => {
-          const dx = Math.abs(block.position.x - x) < 0.5;
-          const dy = Math.abs(block.position.y - y) < 0.5;
-          const dz = Math.abs(block.position.z - z) < 0.5;
-          return dx && dy && dz;
-        });
-      }
-
-      function animate() {
-        requestAnimationFrame(animate);
-
-        const speed = 4.317 / 60;
-        let direction = new THREE.Vector3();
-
-        if (keys['w']) direction.z -= 1;
-        if (keys['s']) direction.z += 1;
-        if (keys['a']) direction.x -= 1;
-        if (keys['d']) direction.x += 1;
-
-        direction.normalize();
-        direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-        direction.multiplyScalar(speed);
-
-        const newX = playerMesh.position.x + direction.x;
-        const newZ = playerMesh.position.z + direction.z;
-
-        if (!checkCollision(newX, playerMesh.position.y, playerMesh.position.z))
-          playerMesh.position.x = newX;
-        if (!checkCollision(playerMesh.position.x, playerMesh.position.y, newZ))
-          playerMesh.position.z = newZ;
-
-        velocityY -= 0.01;
-        const newY = playerMesh.position.y + velocityY;
-
-        if (!checkCollision(playerMesh.position.x, newY, playerMesh.position.z)) {
-          playerMesh.position.y = newY;
-          isOnGround = false;
-        } else {
-          velocityY = 0;
-          isOnGround = true;
-        }
-
-        if (keys[' '] && isOnGround) {
-          velocityY = 5;
-          isOnGround = false;
-        }
-
-        if (keys['ArrowLeft']) yaw += 0.03;
-        if (keys['ArrowRight']) yaw -= 0.03;
-        if (keys['ArrowUp']) pitch -= 0.02;
-        if (keys['ArrowDown']) pitch += 0.02;
-
-        pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
-
-        if (!thirdPerson) {
-          camera.position.copy(playerMesh.position);
-          camera.position.y += 1.7;
-          const direction = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(pitch, yaw, 0));
-          camera.lookAt(playerMesh.position.clone().add(direction));
-        } else {
-          const offset = new THREE.Vector3(0, 2, -5).applyEuler(new THREE.Euler(pitch, yaw, 0));
-          camera.position.copy(playerMesh.position.clone().add(offset));
-          camera.lookAt(playerMesh.position);
-        }
-
-        renderer.render(scene, camera);
-      }
-
-      animate();
-
-      window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
-    </script>
-  </body>
+    });
+  </script>
+</body>
 </html>
